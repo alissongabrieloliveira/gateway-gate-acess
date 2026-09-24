@@ -1,5 +1,5 @@
 const net = require('net');
-const { buildOutputsCommand, buildKeepAliveFrame, parseResponseFrame, FrameExtractor } = require('./mtcpProtocol');
+const { buildPulseCommand, buildKeepAliveFrame, parseResponseFrame, FrameExtractor } = require('./mtcpProtocol');
 const log = require('./log');
 
 const MIN_BACKOFF_MS = 1000;
@@ -11,9 +11,8 @@ const KEEPALIVE_INTERVAL_MS = 5000;
 /**
  * Conexão TCP persistente com um controlador NSE MTCP-4E4S (1 instância por
  * host:porta único, deduplicado da config — ver getControllerConnection).
- * Mantém o último bitmask de saídas conhecido (via os telegramas
- * espontâneos de ~2s do módulo) pra poder montar comandos "aciona saídas"
- * sem apagar saídas que não foram pedidas (ver buildOutputsCommand).
+ * Os comandos são pulsos (ver buildPulseCommand): o módulo desliga o relé
+ * sozinho, então não é preciso guardar o bitmask atual das saídas.
  */
 class ControllerConnection {
   constructor(host, port, ns) {
@@ -22,7 +21,6 @@ class ControllerConnection {
     this.ns = ns;
     this.socket = null;
     this.frameExtractor = new FrameExtractor();
-    this.lastOutputsBitmask = 0;
     this.backoffMs = MIN_BACKOFF_MS;
     this.pendingCommand = null; // { resolve, reject, timer }
     this.commandQueue = Promise.resolve(); // serializa comandos: só 1 em voo por conexão
@@ -49,8 +47,6 @@ class ControllerConnection {
       for (const frame of frames) {
         const parsed = parseResponseFrame(frame);
         if (!parsed) continue;
-        this.lastOutputsBitmask = parsed.outputsBitmask;
-
         if (this.pendingCommand) {
           const { resolve, timer } = this.pendingCommand;
           clearTimeout(timer);
@@ -81,14 +77,14 @@ class ControllerConnection {
     });
   }
 
-  async _doSetOutputs(outputNumbers, turnOn, ns, timeoutMs) {
+  async _doPulseOutputs(outputNumbers, seconds, ns, timeoutMs) {
     if (!this.socket || this.socket.destroyed) {
       throw new Error('Sem conexão com o controlador');
     }
 
-    const frame = buildOutputsCommand(this.lastOutputsBitmask, outputNumbers, turnOn, ns);
+    const frame = buildPulseCommand(outputNumbers, seconds, ns);
 
-    const parsed = await new Promise((resolve, reject) => {
+    await new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pendingCommand = null;
         reject(new Error('Timeout aguardando resposta do controlador'));
@@ -97,16 +93,18 @@ class ControllerConnection {
       this.socket.write(frame, 'ascii');
     });
 
-    return { ok: true, outputState: turnOn ? 'ON' : 'OFF' };
+    return { ok: true };
   }
 
   /**
-   * Liga/desliga 1 ou mais saídas NO MESMO frame (acionamento simultâneo de
-   * verdade — ver buildOutputsCommand). Só 1 comando em voo por conexão, já
-   * que o protocolo não tem id de correlação próprio.
+   * Pulsa 1 ou mais saídas NO MESMO frame (acionamento simultâneo de
+   * verdade — os 2 braços da Entrada recebem o mesmo pulso). Só 1 comando
+   * em voo por conexão, já que o protocolo não tem id de correlação próprio.
+   * Timeout folgado: não foi confirmado se o módulo responde no início ou só
+   * no fim do pulso.
    */
-  setOutputs(outputNumbers, turnOn, ns, timeoutMs = 1000) {
-    const run = () => this._doSetOutputs(outputNumbers, turnOn, ns, timeoutMs);
+  pulseOutputs(outputNumbers, seconds, ns, timeoutMs = seconds * 1000 + 2000) {
+    const run = () => this._doPulseOutputs(outputNumbers, seconds, ns, timeoutMs);
     const resultPromise = this.commandQueue.then(run, run);
     this.commandQueue = resultPromise.catch(() => {});
     return resultPromise;

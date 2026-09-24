@@ -2,6 +2,12 @@ const outputsStore = require('./outputsStore');
 const { getControllerConnection } = require('./controllerConnection');
 const log = require('./log');
 
+// As placas das cancelas são de impulso: cada pulso alterna abre/fecha.
+// Por isso 'open' e 'close' mandam o MESMO pulso — quem garante que o
+// pulso vai no sentido certo é o backend (só manda se o estado presumido
+// for o oposto do pedido). 5s = mesmo tempo do app antigo, testado em campo.
+const PULSE_SECONDS = 5;
+
 async function handleCommand({ requestId, outputIds, action }, ws) {
   const outputs = outputIds.map((id) => outputsStore.getOutput(id));
   const missing = outputIds.filter((id, i) => !outputs[i]);
@@ -25,9 +31,9 @@ async function handleCommand({ requestId, outputIds, action }, ws) {
 
   try {
     const connection = getControllerConnection(host, port, ns);
-    const result = await connection.setOutputs(outputNumbers, action === 'open', ns);
-    log.info(`outputIds=[${outputIds.join(',')}] (saídas ${outputNumbers.join('+')}) ação=${action} -> ${result.outputState}`);
-    ws.send(JSON.stringify({ type: 'ack', requestId, ok: true, outputState: result.outputState }));
+    await connection.pulseOutputs(outputNumbers, PULSE_SECONDS, ns);
+    log.info(`outputIds=[${outputIds.join(',')}] (saídas ${outputNumbers.join('+')}) ação=${action} -> pulso de ${PULSE_SECONDS}s enviado`);
+    ws.send(JSON.stringify({ type: 'ack', requestId, ok: true }));
   } catch (err) {
     log.error(`outputIds=[${outputIds.join(',')}] ação=${action} falhou: ${err.message}`);
     ws.send(JSON.stringify({ type: 'ack', requestId, ok: false, error: err.message }));

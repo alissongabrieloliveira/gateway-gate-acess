@@ -17,7 +17,7 @@ const CLOSE_BRACKET = '>'.charCodeAt(0);
 /**
  * Monta um comando de 24 bytes. func: 2 chars ("00"=liga/desliga ou lê
  * status, "01"/"02"=pulso). byte13: 1 char (aciona='0', lê status='1', ou
- * tempo de pulso cru para func 01/02 — não usado neste MVP). outputs: 4
+ * tempo de pulso cru para func 01/02 — ver buildPulseCommand). outputs: 4
  * chars, um '0'/'1' por saída (saída 1 a 4). ns: 5 chars, serial do módulo.
  */
 function buildCommand(func, byte13, outputs, ns) {
@@ -80,6 +80,28 @@ function buildOutputsCommand(currentBitmask, outputNumbers, turnOn, ns) {
 }
 
 /**
+ * Pulso (função "02", base de 1s): o módulo liga as saídas pedidas e as
+ * desliga sozinho depois de `seconds` segundos. As placas das cancelas são
+ * de impulso (cada pulso alterna abre/fecha, como uma botoeira) — confirmado
+ * em campo em 2026-09-24 com o app antigo. O byte 13 é o tempo como byte CRU
+ * (1-50), não o dígito ASCII — String.fromCharCode + escrita 'ascii' gera
+ * exatamente esse byte. Saídas em '0' no frame não são pulsadas.
+ */
+function buildPulseCommand(outputNumbers, seconds, ns) {
+  if (!Number.isInteger(seconds) || seconds < 1 || seconds > 50) {
+    throw new Error(`seconds precisa ser inteiro entre 1 e 50: ${seconds}`);
+  }
+  const bits = ['0', '0', '0', '0'];
+  for (const outputNumber of outputNumbers) {
+    if (outputNumber < 1 || outputNumber > 4) {
+      throw new Error(`outputNumber precisa estar entre 1 e 4: ${outputNumber}`);
+    }
+    bits[outputNumber - 1] = '1';
+  }
+  return buildCommand('02', String.fromCharCode(seconds), bits.join(''), ns);
+}
+
+/**
  * Parseia um frame de RETORNO completo (Buffer incluindo '<' e '>', 21
  * bytes: <MTCPNSE014e<byte><byte>r<serial(5)>>... — opera em Buffer, não
  * string, porque os 2 bytes de status (entradas/saídas) são valores crus
@@ -136,6 +158,7 @@ module.exports = {
   buildCommand,
   buildKeepAliveFrame,
   buildOutputsCommand,
+  buildPulseCommand,
   parseResponseFrame,
   FrameExtractor,
 };
