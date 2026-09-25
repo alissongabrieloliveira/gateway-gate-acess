@@ -1,7 +1,7 @@
 const WebSocket = require('ws');
 const config = require('./config');
 const log = require('./log');
-const { handleCommand } = require('./commandHandler');
+const { handleCommand, handleOutputTest } = require('./commandHandler');
 const outputsStore = require('./outputsStore');
 
 const MIN_BACKOFF_MS = 1000;
@@ -41,6 +41,11 @@ function connect() {
       } catch (err) {
         log.error(`Config recebida do backend é inválida: ${err.message}`);
       }
+      return;
+    }
+
+    if (payload?.type === 'outputTest') {
+      handleOutputTest(payload, ws);
       return;
     }
 

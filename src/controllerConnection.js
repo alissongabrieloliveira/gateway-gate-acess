@@ -1,5 +1,5 @@
 const net = require('net');
-const { buildPulseCommand, buildKeepAliveFrame, parseResponseFrame, FrameExtractor } = require('./mtcpProtocol');
+const { buildPulseCommand, buildOutputsCommand, buildKeepAliveFrame, parseResponseFrame, FrameExtractor } = require('./mtcpProtocol');
 const log = require('./log');
 
 const MIN_BACKOFF_MS = 1000;
@@ -11,8 +11,10 @@ const KEEPALIVE_INTERVAL_MS = 5000;
 /**
  * Conexão TCP persistente com um controlador NSE MTCP-4E4S (1 instância por
  * host:porta único, deduplicado da config — ver getControllerConnection).
- * Os comandos são pulsos (ver buildPulseCommand): o módulo desliga o relé
- * sozinho, então não é preciso guardar o bitmask atual das saídas.
+ * O fluxo normal só manda pulsos (ver buildPulseCommand): o módulo desliga o
+ * relé sozinho. O liga/desliga de uma saída avulsa (teste por saída, tela de
+ * diagnóstico) precisa do bitmask atual das saídas — guardado de cada frame
+ * que o módulo manda (espontâneo a cada ~2s ou resposta de comando).
  */
 class ControllerConnection {
   constructor(host, port, ns) {
@@ -25,6 +27,7 @@ class ControllerConnection {
     this.pendingCommand = null; // { resolve, reject, timer }
     this.commandQueue = Promise.resolve(); // serializa comandos: só 1 em voo por conexão
     this.keepAliveTimer = null;
+    this.lastOutputsBitmask = null; // null = ainda sem nenhum frame de status
     this._connect();
   }
 
@@ -47,6 +50,7 @@ class ControllerConnection {
       for (const frame of frames) {
         const parsed = parseResponseFrame(frame);
         if (!parsed) continue;
+        this.lastOutputsBitmask = parsed.outputsBitmask;
         if (this.pendingCommand) {
           const { resolve, timer } = this.pendingCommand;
           clearTimeout(timer);
@@ -65,6 +69,7 @@ class ControllerConnection {
         clearInterval(this.keepAliveTimer);
         this.keepAliveTimer = null;
       }
+      this.lastOutputsBitmask = null;
       if (this.pendingCommand) {
         const { reject, timer } = this.pendingCommand;
         clearTimeout(timer);
@@ -77,12 +82,12 @@ class ControllerConnection {
     });
   }
 
-  async _doPulseOutputs(outputNumbers, seconds, ns, timeoutMs) {
+  async _doSendFrame(buildFrame, timeoutMs) {
     if (!this.socket || this.socket.destroyed) {
       throw new Error('Sem conexão com o controlador');
     }
 
-    const frame = buildPulseCommand(outputNumbers, seconds, ns);
+    const frame = buildFrame();
 
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -96,18 +101,39 @@ class ControllerConnection {
     return { ok: true };
   }
 
-  /**
-   * Pulsa 1 ou mais saídas NO MESMO frame (acionamento simultâneo de
-   * verdade — os 2 braços da Entrada recebem o mesmo pulso). Só 1 comando
-   * em voo por conexão, já que o protocolo não tem id de correlação próprio.
-   * Timeout folgado: não foi confirmado se o módulo responde no início ou só
-   * no fim do pulso.
-   */
-  pulseOutputs(outputNumbers, seconds, ns, timeoutMs = seconds * 1000 + 2000) {
-    const run = () => this._doPulseOutputs(outputNumbers, seconds, ns, timeoutMs);
+  // Só 1 comando em voo por conexão, já que o protocolo não tem id de
+  // correlação próprio. O frame é montado na hora de enviar (não na fila),
+  // pra usar o bitmask mais recente no liga/desliga.
+  _enqueue(buildFrame, timeoutMs) {
+    const run = () => this._doSendFrame(buildFrame, timeoutMs);
     const resultPromise = this.commandQueue.then(run, run);
     this.commandQueue = resultPromise.catch(() => {});
     return resultPromise;
+  }
+
+  /**
+   * Pulsa 1 ou mais saídas NO MESMO frame (acionamento simultâneo de
+   * verdade — os 2 braços da Entrada recebem o mesmo pulso). Timeout
+   * folgado: não foi confirmado se o módulo responde no início ou só no fim
+   * do pulso.
+   */
+  pulseOutputs(outputNumbers, seconds, ns, timeoutMs = seconds * 1000 + 2000) {
+    return this._enqueue(() => buildPulseCommand(outputNumbers, seconds, ns), timeoutMs);
+  }
+
+  /**
+   * Liga/desliga (nível sustentado) as saídas pedidas, preservando as
+   * demais a partir do último bitmask reportado pelo módulo. Sem nenhum
+   * status recebido ainda, recusa — mandar com bitmask chutado poderia
+   * desligar o relé de outra cancela.
+   */
+  setOutputs(outputNumbers, turnOn, ns, timeoutMs = 3000) {
+    return this._enqueue(() => {
+      if (this.lastOutputsBitmask === null) {
+        throw new Error('Status atual das saídas ainda desconhecido — aguarde alguns segundos e tente de novo');
+      }
+      return buildOutputsCommand(this.lastOutputsBitmask, outputNumbers, turnOn, ns);
+    }, timeoutMs);
   }
 }
 

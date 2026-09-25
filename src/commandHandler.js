@@ -40,4 +40,41 @@ async function handleCommand({ requestId, outputIds, action }, ws) {
   }
 }
 
-module.exports = { handleCommand };
+const TEST_MODES = ['pulse', 'on', 'off'];
+
+/**
+ * Teste de UMA saída avulsa (tela de diagnóstico, só admin): pulso com
+ * tempo escolhido, ou liga/desliga sustentado. Serve pra acionar cada braço
+ * da Entrada separadamente em campo — não mexe no fluxo normal das cancelas.
+ */
+async function handleOutputTest({ requestId, outputId, mode, seconds }, ws) {
+  const reply = (payload) => ws.send(JSON.stringify({ type: 'ack', requestId, ...payload }));
+
+  const output = outputsStore.getOutput(outputId);
+  if (!output) {
+    log.warn(`Teste referenciando outputId não configurado neste gateway: ${outputId}`);
+    reply({ ok: false, error: 'output not configured on this gateway' });
+    return;
+  }
+  if (!TEST_MODES.includes(mode)) {
+    reply({ ok: false, error: `invalid test mode: ${mode}` });
+    return;
+  }
+
+  const { host, port, ns, outputNumber } = output;
+  try {
+    const connection = getControllerConnection(host, port, ns);
+    if (mode === 'pulse') {
+      await connection.pulseOutputs([outputNumber], seconds, ns);
+    } else {
+      await connection.setOutputs([outputNumber], mode === 'on', ns);
+    }
+    log.info(`[teste] saída ${outputNumber} (outputId=${outputId}) modo=${mode}${mode === 'pulse' ? ` ${seconds}s` : ''} enviado`);
+    reply({ ok: true });
+  } catch (err) {
+    log.error(`[teste] saída ${outputNumber} (outputId=${outputId}) modo=${mode} falhou: ${err.message}`);
+    reply({ ok: false, error: err.message });
+  }
+}
+
+module.exports = { handleCommand, handleOutputTest };
