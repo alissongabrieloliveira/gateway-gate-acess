@@ -112,8 +112,8 @@ class ControllerConnection {
   }
 
   /**
-   * Pulsa 1 ou mais saídas NO MESMO frame (acionamento simultâneo de
-   * verdade — os 2 braços da Entrada recebem o mesmo pulso). Timeout
+   * Pulsa 1 ou mais saídas NO MESMO frame. O fluxo normal pulsa uma saída
+   * por vez (ver commandHandler — braços da cancela dupla em sequência). Timeout
    * folgado: não foi confirmado se o módulo responde no início ou só no fim
    * do pulso.
    */

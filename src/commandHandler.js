@@ -5,8 +5,17 @@ const log = require('./log');
 // As placas das cancelas são de impulso: cada pulso alterna abre/fecha.
 // Por isso 'open' e 'close' mandam o MESMO pulso — quem garante que o
 // pulso vai no sentido certo é o backend (só manda se o estado presumido
-// for o oposto do pedido). 5s = mesmo tempo do app antigo, testado em campo.
-const PULSE_SECONDS = 5;
+// for o oposto do pedido).
+//
+// Cancela dupla (ex.: Entrada = saídas 1 e 3): cada braço é pulsado
+// SEPARADO, um depois do outro. Pulsar os dois no mesmo frame deixava um
+// braço descendo enquanto o outro subia (teste em campo 2026-09-25); pulso
+// de 1s por saída com ~2s de intervalo funcionou (teste em campo
+// 2026-09-26, pela tela de teste por saída).
+const PULSE_SECONDS = 1;
+const INTERVAL_BETWEEN_OUTPUTS_MS = 2000;
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function handleCommand({ requestId, outputIds, action }, ws) {
   const outputs = outputIds.map((id) => outputsStore.getOutput(id));
@@ -17,26 +26,29 @@ async function handleCommand({ requestId, outputIds, action }, ws) {
     return;
   }
 
-  // Todas as saídas de uma mesma direção devem estar no mesmo controlador
-  // físico pra serem acionadas de verdade ao mesmo tempo (1 único frame).
-  const targets = new Set(outputs.map((o) => `${o.host}:${o.port}`));
-  if (targets.size > 1) {
-    log.error(`Comando com saídas em controladores diferentes (${[...targets].join(', ')}) — não é possível sincronizar`);
-    ws.send(JSON.stringify({ type: 'ack', requestId, ok: false, error: 'outputs span multiple controllers' }));
-    return;
-  }
+  // Ordem estável (saída 1 antes da 3), independente da ordem do backend.
+  const ordered = outputs
+    .map((output, i) => ({ output, outputId: outputIds[i] }))
+    .sort((a, b) => a.output.outputNumber - b.output.outputNumber);
 
-  const { host, port, ns } = outputs[0];
-  const outputNumbers = outputs.map((o) => o.outputNumber);
-
+  const done = [];
   try {
-    const connection = getControllerConnection(host, port, ns);
-    await connection.pulseOutputs(outputNumbers, PULSE_SECONDS, ns);
-    log.info(`outputIds=[${outputIds.join(',')}] (saídas ${outputNumbers.join('+')}) ação=${action} -> pulso de ${PULSE_SECONDS}s enviado`);
+    for (const [index, { output, outputId }] of ordered.entries()) {
+      if (index > 0) await wait(INTERVAL_BETWEEN_OUTPUTS_MS);
+      const { host, port, ns, outputNumber } = output;
+      const connection = getControllerConnection(host, port, ns);
+      await connection.pulseOutputs([outputNumber], PULSE_SECONDS, ns);
+      log.info(`outputId=${outputId} (saída ${outputNumber}) ação=${action} -> pulso de ${PULSE_SECONDS}s enviado`);
+      done.push(outputNumber);
+    }
     ws.send(JSON.stringify({ type: 'ack', requestId, ok: true }));
   } catch (err) {
-    log.error(`outputIds=[${outputIds.join(',')}] ação=${action} falhou: ${err.message}`);
-    ws.send(JSON.stringify({ type: 'ack', requestId, ok: false, error: err.message }));
+    // Falha no meio da sequência deixa a cancela dupla dessincronizada
+    // (um braço já mudou) — o erro diz quais saídas já foram pulsadas, pra
+    // corrigir pelo teste por saída.
+    const partial = done.length > 0 ? ` (saída(s) ${done.join('+')} já pulsada(s))` : '';
+    log.error(`outputIds=[${outputIds.join(',')}] ação=${action} falhou${partial}: ${err.message}`);
+    ws.send(JSON.stringify({ type: 'ack', requestId, ok: false, error: `${err.message}${partial}` }));
   }
 }
 
