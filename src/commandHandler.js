@@ -11,9 +11,11 @@ const log = require('./log');
 // SEPARADO, um depois do outro. Pulsar os dois no mesmo frame deixava um
 // braço descendo enquanto o outro subia (teste em campo 2026-09-25); pulso
 // de 1s por saída com ~2s de intervalo funcionou (teste em campo
-// 2026-09-26, pela tela de teste por saída).
+// 2026-09-26, pela tela de teste por saída; Abrir/Fechar Entrada
+// confirmado em 2026-09-28). Intervalo reduzido pra 1s a pedido do
+// usuário — o braço da direita demorava a subir.
 const PULSE_SECONDS = 1;
-const INTERVAL_BETWEEN_OUTPUTS_MS = 2000;
+const INTERVAL_BETWEEN_OUTPUTS_MS = 1000;
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
