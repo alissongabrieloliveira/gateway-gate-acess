@@ -1,5 +1,6 @@
 const { getControllerConnection } = require('./controllerConnection');
 const log = require('./log');
+const status = require('./status');
 
 let outputsById = new Map();
 
@@ -42,6 +43,7 @@ function setOutputs(outputs) {
   }
 
   log.info(`Config recebida do backend: ${outputs.length} saída(s), ${seen.size} controlador(es) único(s)`);
+  status.setOutputsCount(outputs.length);
 }
 
 function getOutput(outputId) {

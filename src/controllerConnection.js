@@ -1,6 +1,7 @@
 const net = require('net');
 const { buildPulseCommand, buildOutputsCommand, buildKeepAliveFrame, parseResponseFrame, FrameExtractor } = require('./mtcpProtocol');
 const log = require('./log');
+const status = require('./status');
 
 const MIN_BACKOFF_MS = 1000;
 const MAX_BACKOFF_MS = 30000;
@@ -28,6 +29,10 @@ class ControllerConnection {
     this.commandQueue = Promise.resolve(); // serializa comandos: só 1 em voo por conexão
     this.keepAliveTimer = null;
     this.lastOutputsBitmask = null; // null = ainda sem nenhum frame de status
+    this.closed = false; // close(): para de reconectar (encerramento do gateway)
+    this.reconnectTimer = null;
+    this.key = `${host}:${port}`;
+    status.setController(this.key, false);
     this._connect();
   }
 
@@ -37,6 +42,7 @@ class ControllerConnection {
 
     socket.on('connect', () => {
       log.info(`[controlador ${this.host}:${this.port}] conectado`);
+      status.setController(this.key, true);
       this.backoffMs = MIN_BACKOFF_MS;
       this.keepAliveTimer = setInterval(() => {
         if (this.socket && !this.socket.destroyed) {
@@ -76,8 +82,10 @@ class ControllerConnection {
         this.pendingCommand = null;
         reject(new Error('Conexão com o controlador caiu'));
       }
+      if (this.closed) return;
+      status.setController(this.key, false);
       log.warn(`[controlador ${this.host}:${this.port}] desconectado, reconectando em ${this.backoffMs}ms`);
-      setTimeout(() => this._connect(), this.backoffMs);
+      this.reconnectTimer = setTimeout(() => this._connect(), this.backoffMs);
       this.backoffMs = Math.min(this.backoffMs * 2, MAX_BACKOFF_MS);
     });
   }
@@ -127,6 +135,14 @@ class ControllerConnection {
    * status recebido ainda, recusa — mandar com bitmask chutado poderia
    * desligar o relé de outra cancela.
    */
+  /** Fecha a conexão de vez (sem reconectar) — encerramento do gateway. */
+  close() {
+    this.closed = true;
+    clearTimeout(this.reconnectTimer);
+    if (this.socket) this.socket.destroy();
+    status.removeController(this.key);
+  }
+
   setOutputs(outputNumbers, turnOn, ns, timeoutMs = 3000) {
     return this._enqueue(() => {
       if (this.lastOutputsBitmask === null) {
@@ -147,4 +163,9 @@ function getControllerConnection(host, port, ns) {
   return connections.get(key);
 }
 
-module.exports = { getControllerConnection };
+function closeAllControllerConnections() {
+  for (const connection of connections.values()) connection.close();
+  connections.clear();
+}
+
+module.exports = { getControllerConnection, closeAllControllerConnections };

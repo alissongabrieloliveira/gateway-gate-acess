@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'" />
+    <title>Gateway das Cancelas</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Gateway das Cancelas</h1>
+        <p class="muted">Liga o sistema da portaria às cancelas. Mantenha aberto durante o expediente.</p>
+      </div>
+      <button id="toggle-config" class="button secondary" type="button">Configurações</button>
+    </header>
+
+    <main>
+      <section id="banner" class="banner neutral" aria-live="polite">
+        <span id="banner-dot" class="dot"></span>
+        <div>
+          <p id="banner-title" class="banner-title">Carregando…</p>
+          <p id="banner-detail" class="banner-detail"></p>
+        </div>
+      </section>
+
+      <section id="config" class="card hidden">
+        <h2>Configuração</h2>
+        <p class="muted">
+          O token é gerado em <strong>Controle de Portões → Gateway</strong> no sistema (só administrador) e aparece uma única vez.
+        </p>
+        <form id="config-form" autocomplete="off">
+          <label>
+            Endereço do sistema
+            <input id="backend-url" type="text" spellcheck="false" required />
+          </label>
+          <label>
+            Token do gateway
+            <input id="device-token" type="password" spellcheck="false" />
+            <span id="token-hint" class="hint"></span>
+          </label>
+          <p id="config-error" class="error hidden"></p>
+          <div class="actions">
+            <button id="cancel-config" class="button secondary" type="button">Cancelar</button>
+            <button class="button primary" type="submit">Salvar e conectar</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <h2>Sistema</h2>
+          <p id="backend-state" class="value">—</p>
+          <p id="backend-since" class="muted"></p>
+        </article>
+        <article class="card">
+          <h2>Controladora</h2>
+          <ul id="controllers" class="list"><li class="muted">Aguardando a configuração do sistema</li></ul>
+        </article>
+        <article class="card">
+          <h2>Saídas configuradas</h2>
+          <p id="outputs-count" class="value">—</p>
+          <p class="muted">Vêm do sistema (Controle de Portões).</p>
+        </article>
+      </section>
+
+      <section class="card events">
+        <div class="events-header">
+          <h2>Eventos</h2>
+          <button id="open-logs" class="button link" type="button">Abrir pasta de logs</button>
+        </div>
+        <ol id="events" class="events-list"></ol>
+      </section>
+    </main>
+
+    <footer class="footer muted">Versão <span id="version"></span></footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>

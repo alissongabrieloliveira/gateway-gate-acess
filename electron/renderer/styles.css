@@ -1,0 +1,283 @@
+:root {
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --border: #e3e6ea;
+  --ink: #1d2430;
+  --muted: #6b7380;
+  --green: #15803d;
+  --green-bg: #dcfce7;
+  --amber: #b45309;
+  --amber-bg: #fef3c7;
+  --red: #b91c1c;
+  --red-bg: #fee2e2;
+  --blue: #1d4ed8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.45 'Segoe UI', system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+p {
+  margin: 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.hidden {
+  display: none !important;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 24px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 24px;
+  min-height: 0;
+}
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.banner-title {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.banner-detail {
+  margin-top: 2px;
+}
+
+.dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--muted);
+}
+
+.banner.ok {
+  background: var(--green-bg);
+  border-color: #bbf7d0;
+}
+.banner.ok .dot {
+  background: var(--green);
+}
+.banner.warn {
+  background: var(--amber-bg);
+  border-color: #fde68a;
+}
+.banner.warn .dot {
+  background: var(--amber);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.banner.bad {
+  background: var(--red-bg);
+  border-color: #fecaca;
+}
+.banner.bad .dot {
+  background: var(--red);
+  animation: pulse 1s ease-in-out infinite;
+}
+.banner.neutral {
+  background: var(--card);
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.value {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.state-ok {
+  color: var(--green);
+}
+.state-warn {
+  color: var(--amber);
+}
+.state-bad {
+  color: var(--red);
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-weight: 600;
+}
+
+input {
+  font: inherit;
+  font-weight: 400;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+input:focus {
+  outline: 2px solid #93c5fd;
+  border-color: var(--blue);
+}
+
+.hint {
+  font-weight: 400;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.error {
+  color: var(--red);
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.button {
+  font: inherit;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.button.primary {
+  background: var(--blue);
+  color: #fff;
+}
+.button.secondary {
+  background: var(--card);
+  border-color: var(--border);
+  color: var(--ink);
+}
+.button.link {
+  background: none;
+  color: var(--blue);
+  padding: 0;
+}
+
+.events {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 180px;
+}
+
+.events-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.events-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+  font-family: Consolas, 'Cascadia Mono', monospace;
+  font-size: 12.5px;
+}
+
+.events-list li {
+  display: flex;
+  gap: 12px;
+  padding: 4px 0;
+  border-bottom: 1px solid #f0f1f3;
+}
+
+.events-list time {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.events-list .warn {
+  color: var(--amber);
+}
+.events-list .error {
+  color: var(--red);
+  font-weight: 400;
+}
+
+.footer {
+  padding: 8px 24px 12px;
+  font-size: 12px;
+}

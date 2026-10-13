@@ -1,15 +1,45 @@
 {
   "name": "gateway",
+  "productName": "Gateway das Cancelas",
   "version": "1.0.0",
-  "description": "Processo local que roda na rede do cliente, conecta ao backend via WebSocket e fala com a controladora NSE MTCP-4E4S para abrir/fechar cancelas.",
-  "main": "src/index.js",
+  "description": "Gateway das cancelas: roda na máquina da portaria (app Electron) ou no terminal, conecta ao backend via WebSocket e fala com a controladora NSE MTCP-4E4S para abrir/fechar cancelas.",
+  "main": "electron/main.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "app": "electron .",
+    "dist": "electron-builder --win nsis --publish never"
   },
   "license": "ISC",
   "dependencies": {
     "dotenv": "^17.4.2",
     "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "br.com.gateacess.gateway",
+    "productName": "Gateway das Cancelas",
+    "files": [
+      "src/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "artifactName": "Gateway-das-Cancelas-${version}-instalador.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Gateway das Cancelas"
+    }
   }
 }
